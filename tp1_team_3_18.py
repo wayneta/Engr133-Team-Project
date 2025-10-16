@@ -33,9 +33,52 @@ Academic Integrity Statement:
     another student access to my code.  The project I am
     submitting is my own original work.
 """
-from PIL import Image
+from PIL import Image, ImageOps
 import numpy as np
+import matplotlib.pyplot as plt
 
+
+def linearize(img_array):
+    #Linearize the pixels for greyscale 
+    if img_array.ndim==2:
+        for i in range(img_array.shape[0]):
+            for j in range(img_array.shape[1]):
+                c_prime=img_array[i,j]
+                if c_prime<=0.04045:
+                    img_array[i,j]=c_prime/12.92
+                else:
+                    img_array[i,j]=((c_prime+0.055)/1.055)**2.4
+    
+    #Linearize the pixels for color
+    else:
+        for i in range(img_array.shape[0]):
+            for j in range(img_array.shape[1]):
+                for k in range(img_array.shape[2]):
+                    c_prime=img_array[i,j,k]
+                    if c_prime<=0.04045:
+                        img_array[i,j,k]=c_prime/12.92
+                    else:
+                        img_array[i,j,k]=((c_prime+0.055)/1.055)**2.4
+    
+    return img_array
+
+def load_img(path):
+    # opening the image selected by user
+    img=Image.open(path)
+    # making image RGB into array
+    img_array=np.array(img)
+    # if statement for if the image array has 4 dimensions, then convert to 3
+    if img_array.shape[-1]==4:
+        img_array=img_array[:,:,:3]
+    # if statement to make sure the img_array is uint8
+    if img_array.dtype!=np.uint8:
+        img_array=img_array.astype(np.uint8)
+    # returns img_array now following our goal plans
+
+    if img_array.all() <= 1.0:
+        img_array = int(img_array.all() * 255)
+
+    return img_array
 
 def rgb_to_hsv(red, green, blue):
 
@@ -71,34 +114,96 @@ def rgb_to_hsv(red, green, blue):
     return h, s, v
 
 def convert_to_hsv(rgb_image):
-
-
-    return
-
-
-def cleanImage(array):
-    print(f"Image shape before cleaning: {array.shape}")
     
-    aspectRatio = len(array[0]) / len(array)
-    newWidth = 100
-    newHeight = 100
-    if aspectRatio < 1:
-        newHeight /= aspectRatio
-    elif aspectRatio > 1:
-        newWidth /= 100
-    image = Image.resize(size=[newHeight, newWidth], resample=2)
+    rgb_array = np.array(rgb_image)
+    hsv_image = np.zeros_like(rgb_array)
 
-    print(f"Resized image to: ({newHeight}, {newWidth})")
-    Image.ImageOps.pad(image=image, size=[100, 100], color="black", centering=(0.5, 0.5))
 
-    outputArray = np.array(image)
-    print(f"Image shape after cleaning: {outputArray.shape}")
-    return outputArray
+    height, width, _ = rgb_array.shape
+    for i in range(height):
+        for j in range(width):
+            red, green, blue = rgb_array[i, j]
+            h, s, v = rgb_to_hsv(red, green, blue)
+            hsv_image[i, j] = [h, s, v]
+
+    hsv_image = hsv_image.astype(np.uint8)
+
+    return hsv_image
+
+
+def clean_image(array):
+
+    aspect_ratio = len(array[0]) / len(array)  # calculate width-to-height ratio
+    new_width = 100  # base width for resizing
+    new_height = 100  # base height for resizing
+
+    # adjust dimensions based on aspect ratio
+    if aspect_ratio < 1:  
+        new_width *= aspect_ratio  # narrow image: scale width down
+    elif aspect_ratio > 1:
+        new_height /= aspect_ratio  # wide image: scale height down
+
+    # convert dimensions to integers
+    new_height = int(new_height)
+    new_width = int(new_width)
+
+    # resize image 
+    image = Image.fromarray(array).resize(size=[new_width, new_height], resample=Image.Resampling.BILINEAR)
+    print(f"Resized image to: ({new_height}, {new_width})")
+
+    # pad image to 100×100 with black borders, centered at middle
+    image = ImageOps.pad(image=image, size=[100, 100], color="black")
+
+    # convert processed image back to numpy array
+    output_array = np.array(image)
+
+    return output_array  # return cleaned 100×100 image array
 
 def main():
     
-    image_path = str(int("Enter the path of the image you want to convert to hsv: "))
-    cleanImage(image_path)
+    image_path = input("Enter the path of the image you want to convert to hsv: ")
+
+    image = Image.open(image_path)
+    image_array = load_img(image_path)
+
+    normalized_array = image_array / 255
+
+
+    linear_array = linearize(normalized_array)
+
+    print(type(linear_array))
+    outputArray = clean_image(linear_array)
+
+    coordinate_x, coordinate_y = map(int, input("Enter the x and y coordinates of the pixel you want to inspect: ").split(','))
+
+    rgb_image = Image.fromarray(outputArray)
+
+    pixel_rgb = rgb_image.getpixel((coordinate_x, coordinate_y))
+
+    red = pixel_rgb[0]
+    green = pixel_rgb[1]
+    blue = pixel_rgb[2]
+
+    print(f"RGB values of the ({coordinate_x}, {coordinate_y}) pixel: R={red}, G={green}, B={blue}")
+    print(f"Converting {image_path} to HSV...")
+
+    hsv_image = convert_to_hsv(image_array)
+
+    image_hsv = Image.fromarray(hsv_image)
+    
+    pixel_hsv = image_hsv.getpixel((coordinate_x, coordinate_y))
+
+    h = pixel_hsv[0]
+    s = pixel_hsv[1]
+    v = pixel_hsv[2]
+    
+    print(f"HSV values of the ({coordinate_x}, {coordinate_y}) pixel: H={h}, S={s}, V={v}")
+
+    plt.imshow(hsv_image)
+    plt.axis("off")
+    plt.show()
+
 
 if __name__ == "__main__":
     main()
+
